@@ -66,12 +66,23 @@ class Polygon2DEditor : public AbstractPolygon2DEditor {
 		UV_MODE_MOVE,
 		UV_MODE_ROTATE,
 		UV_MODE_SCALE,
+		UV_MODE_INSERT_POINT,
+		UV_MODE_REMOVE_POINT,
 		UV_MODE_ADD_POLYGON,
 		UV_MODE_REMOVE_POLYGON,
 		UV_MODE_PAINT_WEIGHT,
 		UV_MODE_CLEAR_WEIGHT,
 		UV_MODE_MAX
 	};
+
+	enum class UV_EDIT_MODE {
+		UV,
+		POINTS,
+		POLYGONS,
+		BONES
+	};
+	
+	bool is_uv_edit_mode(const UV_EDIT_MODE mode) const;
 
 	Button *uv_edit_mode[4];
 	Ref<ButtonGroup> uv_edit_group;
@@ -162,6 +173,9 @@ class Polygon2DEditor : public AbstractPolygon2DEditor {
 
 	int _get_polygon_count() const override;
 
+private:
+	Transform2D _get_polygon_to_ui_transform();
+
 protected:
 	virtual Node2D *_get_node() const override;
 	virtual void _set_node(Node *p_polygon) override;
@@ -187,4 +201,8 @@ public:
 	Polygon2DEditorPlugin();
 };
 
+
+
 #endif // POLYGON_2D_EDITOR_PLUGIN_H
+
+

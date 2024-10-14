@@ -35,6 +35,7 @@
 #include "scene/2d/polygon_2d.h"
 #include "scene/gui/box_container.h"
 
+
 class Button;
 class CanvasItemEditor;
 class ConfirmationDialog;
@@ -46,6 +47,23 @@ class AbstractPolygon2DEditor : public HBoxContainer {
 	Button *button_edit = nullptr;
 	Button *button_delete = nullptr;
 
+	
+
+	
+	Vector2 original_mouse_pos;
+
+	Vector<Vector2> pre_move_edit;
+	Vector<Vector2> wip;
+	bool wip_active = false;
+	bool wip_destructive = false;
+
+	bool _polygon_editing_enabled = false;
+
+	CanvasItemEditor *canvas_item_editor = nullptr;
+	Panel *panel = nullptr;
+	ConfirmationDialog *create_resource = nullptr;
+
+protected:
 	struct Vertex {
 		Vertex() {}
 		Vertex(int p_vertex) :
@@ -79,18 +97,8 @@ class AbstractPolygon2DEditor : public HBoxContainer {
 	Vertex hover_point; // point under mouse cursor
 	Vertex selected_point; // currently selected
 	PosVertex edge_point; // adding an edge point?
-	Vector2 original_mouse_pos;
-
-	Vector<Vector2> pre_move_edit;
-	Vector<Vector2> wip;
-	bool wip_active = false;
-	bool wip_destructive = false;
-
-	bool _polygon_editing_enabled = false;
-
-	CanvasItemEditor *canvas_item_editor = nullptr;
-	Panel *panel = nullptr;
-	ConfirmationDialog *create_resource = nullptr;
+	bool _update_edge_point(const PosVertex &new_edge_point);
+	bool _polygon_insert_vertex(const int polygon, const int at_vertex_idx, const Vector2 &at_pos, const Vector2 &pos_if_eidt);
 
 protected:
 	enum {
@@ -114,6 +122,7 @@ protected:
 	Vertex get_active_point() const;
 	PosVertex closest_point(const Vector2 &p_pos) const;
 	PosVertex closest_edge_point(const Vector2 &p_pos) const;
+	PosVertex closest_edge_point(const Vector2 &p_pos, const Transform2D &xform) const;
 
 	bool _is_empty() const;
 

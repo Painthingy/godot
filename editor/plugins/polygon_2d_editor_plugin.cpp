@@ -98,6 +98,13 @@ int Polygon2DEditor::_get_polygon_count() const {
 	}
 }
 
+Transform2D Polygon2DEditor::_get_polygon_to_ui_transform() {
+	Transform2D mtx;
+	mtx.columns[2] = -uv_draw_ofs * uv_draw_zoom;
+	mtx.scale_basis(Vector2(uv_draw_zoom, uv_draw_zoom));
+	return mtx;
+}
+
 void Polygon2DEditor::_notification(int p_what) {
 	switch (p_what) {
 		case EditorSettings::NOTIFICATION_EDITOR_SETTINGS_CHANGED: {
@@ -120,6 +127,8 @@ void Polygon2DEditor::_notification(int p_what) {
 			uv_button[UV_MODE_MOVE]->set_icon(get_editor_theme_icon(SNAME("ToolMove")));
 			uv_button[UV_MODE_ROTATE]->set_icon(get_editor_theme_icon(SNAME("ToolRotate")));
 			uv_button[UV_MODE_SCALE]->set_icon(get_editor_theme_icon(SNAME("ToolScale")));
+			uv_button[UV_MODE_INSERT_POINT]->set_icon(get_editor_theme_icon(SNAME("Edit"))); // MYTODO: set icon
+			uv_button[UV_MODE_REMOVE_POINT]->set_icon(get_editor_theme_icon(SNAME("Edit"))); // MYTODO: set icon
 			uv_button[UV_MODE_ADD_POLYGON]->set_icon(get_editor_theme_icon(SNAME("Edit")));
 			uv_button[UV_MODE_REMOVE_POLYGON]->set_icon(get_editor_theme_icon(SNAME("Close")));
 			uv_button[UV_MODE_PAINT_WEIGHT]->set_icon(get_editor_theme_icon(SNAME("Bucket")));
@@ -249,7 +258,7 @@ void Polygon2DEditor::_bone_paint_selected(int p_index) {
 
 void Polygon2DEditor::_uv_edit_mode_select(int p_mode) {
 	if (p_mode == 0) { //uv
-
+		// MYTODO : clean those ugly expression
 		uv_button[UV_MODE_CREATE]->hide();
 		uv_button[UV_MODE_CREATE_INTERNAL]->hide();
 		uv_button[UV_MODE_REMOVE_INTERNAL]->hide();
@@ -260,6 +269,8 @@ void Polygon2DEditor::_uv_edit_mode_select(int p_mode) {
 		uv_button[UV_MODE_REMOVE_POLYGON]->hide();
 		uv_button[UV_MODE_PAINT_WEIGHT]->hide();
 		uv_button[UV_MODE_CLEAR_WEIGHT]->hide();
+		uv_button[UV_MODE_INSERT_POINT]->hide();
+		uv_button[UV_MODE_REMOVE_POINT]->hide();
 		_uv_mode(UV_MODE_EDIT_POINT);
 
 		bone_scroll_main_vb->hide();
@@ -268,7 +279,7 @@ void Polygon2DEditor::_uv_edit_mode_select(int p_mode) {
 		bone_paint_radius_label->hide();
 	} else if (p_mode == 1) { //poly
 
-		for (int i = 0; i <= UV_MODE_SCALE; i++) {
+		for (int i = 0; i <= UV_MODE_REMOVE_POINT; i++) {
 			uv_button[i]->show();
 		}
 		uv_button[UV_MODE_ADD_POLYGON]->hide();
@@ -283,7 +294,7 @@ void Polygon2DEditor::_uv_edit_mode_select(int p_mode) {
 		bone_paint_radius_label->hide();
 	} else if (p_mode == 2) { //splits
 
-		for (int i = 0; i <= UV_MODE_SCALE; i++) {
+		for (int i = 0; i <= UV_MODE_REMOVE_POINT; i++) {
 			uv_button[i]->hide();
 		}
 		uv_button[UV_MODE_ADD_POLYGON]->show();
@@ -499,9 +510,8 @@ void Polygon2DEditor::_uv_input(const Ref<InputEvent> &p_input) {
 		return;
 	}
 
-	Transform2D mtx;
-	mtx.columns[2] = -uv_draw_ofs * uv_draw_zoom;
-	mtx.scale_basis(Vector2(uv_draw_zoom, uv_draw_zoom));
+	Transform2D mtx = _get_polygon_to_ui_transform();
+	
 
 	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 
@@ -679,8 +689,27 @@ void Polygon2DEditor::_uv_input(const Ref<InputEvent> &p_input) {
 						uv_move_current = UV_MODE_MOVE;
 					} else if (mb->is_command_or_control_pressed()) {
 						uv_move_current = UV_MODE_ROTATE;
+					} else if (mb->is_alt_pressed()) {
+						uv_move_current = UV_MODE_INSERT_POINT;
 					}
+					
 				}
+
+				if (uv_move_current == UV_MODE_INSERT_POINT) {
+
+					Vector2 gpoint = mb->get_position();
+
+					const PosVertex insert = closest_edge_point(gpoint, mtx);
+
+					
+					if (insert.valid()) {
+						_polygon_insert_vertex(insert.polygon, insert.vertex, mtx.affine_inverse().xform(insert.pos), mtx.affine_inverse().xform(gpoint));
+
+					}
+
+				}
+
+
 
 				if (uv_move_current == UV_MODE_EDIT_POINT) {
 					point_drag_index = -1;
@@ -842,6 +871,13 @@ void Polygon2DEditor::_uv_input(const Ref<InputEvent> &p_input) {
 	Ref<InputEventMouseMotion> mm = p_input;
 
 	if (mm.is_valid()) {
+		Vector2 gpoint = mm->get_position();
+		
+		const PosVertex on_edge_vertex = closest_edge_point(gpoint, mtx);
+		bool edge_point_changed = _update_edge_point(on_edge_vertex);
+		if (edge_point_changed) uv_edit_draw->queue_redraw();
+
+
 		if (uv_drag) {
 			Vector2 uv_drag_to = mm->get_position();
 			uv_drag_to = snap_point(uv_drag_to);
@@ -1047,6 +1083,11 @@ void Polygon2DEditor::_update_zoom_and_pan(bool p_zoom_at_center) {
 	uv_edit_draw->queue_redraw();
 }
 
+
+bool Polygon2DEditor::is_uv_edit_mode(const UV_EDIT_MODE mode) const {
+	return uv_edit_mode[static_cast<size_t>(mode)]->is_pressed();
+}
+
 void Polygon2DEditor::_uv_draw() {
 	if (!uv_edit->is_visible() || !_get_node()) {
 		return;
@@ -1154,11 +1195,11 @@ void Polygon2DEditor::_uv_draw() {
 	// All UV points are sharp, so use the sharp handle icon
 	Ref<Texture2D> handle = get_editor_theme_icon(SNAME("EditorPathSharpHandle"));
 
-	Color poly_line_color = Color(0.9, 0.5, 0.5);
+	Color poly_line_color = Color(0.9, 0.0, 0.0); // MYTODO: undo this color change
 	if (polygons.size() || polygon_create.size()) {
 		poly_line_color.a *= 0.25;
 	}
-	Color polygon_line_color = Color(0.5, 0.5, 0.9);
+	Color polygon_line_color = Color(0.9, 0.0, 0.0); // MYTODO: undo this color change
 	Color polygon_fill_color = polygon_line_color;
 	polygon_fill_color.a *= 0.5;
 	Color prev_color = Color(0.5, 0.5, 0.5);
@@ -1288,7 +1329,18 @@ void Polygon2DEditor::_uv_draw() {
 		//draw paint circle
 		uv_edit_draw->draw_circle(bone_paint_pos, bone_paint_radius->get_value() * EDSCALE, Color(1, 1, 1, 0.1));
 	}
+
+	if (edge_point.valid() && is_uv_edit_mode(UV_EDIT_MODE::POINTS)) {
+		Ref<Texture2D> add_handle = get_editor_theme_icon(SNAME("EditorHandleAdd"));
+		uv_edit_draw->draw_texture(add_handle, edge_point.pos - add_handle->get_size() * 0.5);
+	}
+	
+
 }
+
+
+
+
 
 void Polygon2DEditor::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("_update_bone_list"), &Polygon2DEditor::_update_bone_list);
@@ -1381,6 +1433,8 @@ Polygon2DEditor::Polygon2DEditor() {
 	uv_button[UV_MODE_MOVE]->set_tooltip_text(TTR("Move Polygon"));
 	uv_button[UV_MODE_ROTATE]->set_tooltip_text(TTR("Rotate Polygon"));
 	uv_button[UV_MODE_SCALE]->set_tooltip_text(TTR("Scale Polygon"));
+	uv_button[UV_MODE_INSERT_POINT]->set_tooltip_text(TTR("Insert Point"));
+	uv_button[UV_MODE_REMOVE_POINT]->set_tooltip_text(TTR("Remove Point"));
 	uv_button[UV_MODE_ADD_POLYGON]->set_tooltip_text(TTR("Create a custom polygon. Enables custom polygon rendering."));
 	uv_button[UV_MODE_REMOVE_POLYGON]->set_tooltip_text(TTR("Remove a custom polygon. If none remain, custom polygon rendering is disabled."));
 	uv_button[UV_MODE_PAINT_WEIGHT]->set_tooltip_text(TTR("Paint weights with specified intensity."));
@@ -1566,3 +1620,6 @@ Polygon2DEditor::Polygon2DEditor() {
 Polygon2DEditorPlugin::Polygon2DEditorPlugin() :
 		AbstractPolygon2DEditorPlugin(memnew(Polygon2DEditor), "Polygon2D") {
 }
+
+
+

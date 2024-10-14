@@ -129,6 +129,50 @@ bool AbstractPolygon2DEditor::_has_resource() const {
 void AbstractPolygon2DEditor::_create_resource() {
 }
 
+bool AbstractPolygon2DEditor::_update_edge_point(const PosVertex &new_edge_point) {
+	bool changed = false;
+	if (new_edge_point.valid()) {
+		hover_point = Vertex();
+		edge_point = new_edge_point;
+		changed = true;
+	} else if (edge_point.valid()) {
+		edge_point = PosVertex();
+		changed = true;
+	}
+
+	return changed;
+}
+
+bool AbstractPolygon2DEditor::_polygon_insert_vertex(const int polygon, const int at_vertex_idx, const Vector2 &at_pos, const Vector2 &pos_if_eidt) {
+	bool committed = false;
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
+	Vector<Vector2> vertices = _get_polygon(polygon);
+
+	if (vertices.size() < (_is_line() ? 2 : 3)) {
+		vertices.push_back(pos_if_eidt);
+		undo_redo->create_action(TTR("Edit Polygon"));
+		selected_point = Vertex(polygon, vertices.size());
+		_action_set_polygon(polygon, vertices);
+		_commit_action();
+		committed = true;
+
+	} else {
+		//edited_point = PosVertex(insert.polygon, insert.vertex + 1, mtx.affine_inverse().xform(insert.pos));
+		edited_point = PosVertex(polygon, at_vertex_idx + 1, at_pos);
+		vertices.insert(edited_point.vertex, edited_point.pos);
+		//pre_move_edit = vertices;
+		selected_point = Vertex(edited_point.polygon, edited_point.vertex);
+		edge_point = PosVertex();
+		undo_redo->create_action(TTR("Insert Point"));
+		_action_set_polygon(polygon, vertices);
+		_commit_action();
+		committed = true;
+	}
+
+
+	return committed;
+}
+
 void AbstractPolygon2DEditor::_menu_option(int p_option) {
 	switch (p_option) {
 		case MODE_CREATE: {
@@ -679,12 +723,18 @@ AbstractPolygon2DEditor::PosVertex AbstractPolygon2DEditor::closest_point(const 
 }
 
 AbstractPolygon2DEditor::PosVertex AbstractPolygon2DEditor::closest_edge_point(const Vector2 &p_pos) const {
+	const Transform2D xform = canvas_item_editor->get_canvas_transform() * _get_node()->get_global_transform();
+	return closest_edge_point(p_pos, xform);
+}
+
+
+AbstractPolygon2DEditor::PosVertex AbstractPolygon2DEditor::closest_edge_point(const Vector2 &p_pos, const Transform2D &xform) const {
 	const real_t grab_threshold = EDITOR_GET("editors/polygon_editor/point_grab_radius");
 	const real_t eps = grab_threshold * 2;
 	const real_t eps2 = eps * eps;
 
 	const int n_polygons = _get_polygon_count();
-	const Transform2D xform = canvas_item_editor->get_canvas_transform() * _get_node()->get_global_transform();
+	//const Transform2D xform = canvas_item_editor->get_canvas_transform() * _get_node()->get_global_transform();
 
 	PosVertex closest;
 	real_t closest_dist = 1e10;

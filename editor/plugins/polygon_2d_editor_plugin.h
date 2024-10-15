@@ -172,12 +172,14 @@ class Polygon2DEditor : public AbstractPolygon2DEditor {
 	void _bone_paint_selected(int p_index);
 
 	int _get_polygon_count() const override;
+	Vector<Vector2> _get_polygon_edge_vertices(int p_idx) const override;
 
 private:
 	Transform2D _get_polygon_to_ui_transform();
 
 protected:
-	virtual Node2D *_get_node() const override;
+
+	virtual Polygon2D *_get_node() const override;
 	virtual void _set_node(Node *p_polygon) override;
 
 	virtual Vector2 _get_offset(int p_idx) const override;

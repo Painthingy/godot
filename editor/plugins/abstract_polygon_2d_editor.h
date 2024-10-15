@@ -99,6 +99,8 @@ protected:
 	PosVertex edge_point; // adding an edge point?
 	bool _update_edge_point(const PosVertex &new_edge_point);
 	bool _polygon_insert_vertex(const int polygon, const int at_vertex_idx, const Vector2 &at_pos, const Vector2 &pos_if_eidt);
+	virtual Vector<Vector2> _get_polygon_edge_vertices(int p_idx) const;
+
 
 protected:
 	enum {

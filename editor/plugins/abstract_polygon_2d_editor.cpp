@@ -103,6 +103,8 @@ Vector2 AbstractPolygon2DEditor::_get_offset(int p_idx) const {
 	return Vector2(0, 0);
 }
 
+
+
 void AbstractPolygon2DEditor::_commit_action() {
 	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 	undo_redo->add_do_method(canvas_item_editor, "update_viewport");
@@ -172,6 +174,12 @@ bool AbstractPolygon2DEditor::_polygon_insert_vertex(const int polygon, const in
 
 	return committed;
 }
+
+Vector<Vector2> AbstractPolygon2DEditor::_get_polygon_edge_vertices(int p_idx) const {
+	return _get_polygon(p_idx);
+}
+
+
 
 void AbstractPolygon2DEditor::_menu_option(int p_option) {
 	switch (p_option) {
@@ -734,13 +742,12 @@ AbstractPolygon2DEditor::PosVertex AbstractPolygon2DEditor::closest_edge_point(c
 	const real_t eps2 = eps * eps;
 
 	const int n_polygons = _get_polygon_count();
-	//const Transform2D xform = canvas_item_editor->get_canvas_transform() * _get_node()->get_global_transform();
 
 	PosVertex closest;
 	real_t closest_dist = 1e10;
 
 	for (int j = 0; j < n_polygons; j++) {
-		Vector<Vector2> points = _get_polygon(j);
+		Vector<Vector2> points = _get_polygon_edge_vertices(j);
 		const Vector2 offset = _get_offset(j);
 		const int n_points = points.size();
 		const int n_segments = n_points - (_is_line() ? 1 : 0);

@@ -436,6 +436,10 @@ Array Polygon2D::get_polygons() const {
 	return polygons;
 }
 
+int Polygon2D::get_polygon_count() const {
+	return MAX(polygons.size(), 1);
+}
+
 void Polygon2D::set_color(const Color &p_color) {
 	color = p_color;
 	queue_redraw();

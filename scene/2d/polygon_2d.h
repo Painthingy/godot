@@ -105,6 +105,8 @@ public:
 	void set_polygons(const Array &p_polygons);
 	Array get_polygons() const;
 
+	int get_polygon_count() const;
+
 	void set_color(const Color &p_color);
 	Color get_color() const;
 

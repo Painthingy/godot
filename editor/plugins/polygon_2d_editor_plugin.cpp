@@ -77,7 +77,9 @@ class UVEditDialog : public AcceptDialog {
 	}
 };
 
-Node2D *Polygon2DEditor::_get_node() const {
+
+
+Polygon2D *Polygon2DEditor::_get_node() const {
 	return node;
 }
 
@@ -91,11 +93,39 @@ Vector2 Polygon2DEditor::_get_offset(int p_idx) const {
 }
 
 int Polygon2DEditor::_get_polygon_count() const {
-	if (node->get_internal_vertex_count() > 0) {
-		return 0; //do not edit if internal vertices exist
-	} else {
-		return 1;
+	//if (node->get_internal_vertex_count() > 0) {
+	//	return 0; //do not edit if internal vertices exist
+	//} else {
+	//	return 1;
+	//}
+	
+
+	return _get_node()->get_polygon_count();
+}
+
+
+
+Vector<Vector2> Polygon2DEditor::_get_polygon_edge_vertices(int p_idx) const {
+	Polygon2D *polygon_2d_node = _get_node();
+	const Array node_polygons = polygon_2d_node->get_polygons();
+	Vector<Vector2> polygon = polygon_2d_node->get_polygon();
+
+	if (node_polygons.is_empty()) {
+		polygon.resize(polygon.size() - polygon_2d_node->get_internal_vertex_count());
+		return polygon;
+	} else if (node_polygons.size() > p_idx) {
+		
+		Array vertex_list = node_polygons[p_idx];
+		Vector<Vector2> vertices;
+		vertices.resize(vertex_list.size());
+		for (int i = 0; i < vertex_list.size(); i++) {
+			vertices.set(i, polygon[vertex_list[i]]);
+		}
+
+		return vertices;
 	}
+
+	return Vector<Vector2>();
 }
 
 Transform2D Polygon2DEditor::_get_polygon_to_ui_transform() {

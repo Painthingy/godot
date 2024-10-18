@@ -437,7 +437,84 @@ Array Polygon2D::get_polygons() const {
 }
 
 int Polygon2D::get_polygon_count() const {
-	return MAX(polygons.size(), 1);
+	// outter polygon and polygons
+	return get_internal_polygon_count() + 1;
+}
+
+int Polygon2D::get_internal_polygon_count() const {
+	return polygons.size();
+}
+
+int Polygon2D::get_vertex_count() const {
+	return polygon.size();
+}
+
+int Polygon2D::get_non_internal_vertex_count() const {
+	return get_vertex_count() - get_internal_vertex_count();
+}
+
+bool Polygon2D::is_vertex_internal(const int p_vertex) const {
+	return p_vertex >= get_non_internal_vertex_count();
+}
+
+bool Polygon2D::is_vertex_last_non_internal(const int p_vertex) const {
+	return p_vertex == get_non_internal_vertex_count() - 1;
+}
+
+void Polygon2D::clear_polygons() {
+	polygons.clear();
+}
+
+Polygon2D::NeighborVertices Polygon2D::get_inserted_point_neighbor(const int p_polygon_idx, const int p_insert_pos) const {
+	if (p_polygon_idx == 0) {
+		const int n_vertices = get_non_internal_vertex_count();
+		if (p_insert_pos > n_vertices) {
+			return NeighborVertices{};
+		}
+		else if (p_insert_pos == n_vertices || p_insert_pos == 0) {
+			return NeighborVertices{ n_vertices - 1, 0 };
+		}
+		else {
+			return NeighborVertices{ p_insert_pos - 1, p_insert_pos };
+		}
+
+	}
+	else {
+		const Array p_polygon = get_polygons().get(p_polygon_idx - 1);
+		const int p_polygon_size = p_polygon.size();
+		if (p_polygon_size < 3)
+			return NeighborVertices{};
+
+		int p_prev;
+		int p_next;
+
+		if (p_insert_pos == 0 || p_insert_pos == p_polygon_size) {
+			p_prev = p_polygon.back();
+			p_next = p_polygon.front();
+
+		} else {
+			p_prev = p_polygon.get(p_insert_pos - 1);
+			p_next = p_polygon.get(p_insert_pos);
+		}
+		return NeighborVertices{ p_prev, p_next };
+	}
+	
+}
+
+bool Polygon2D::is_inserted_point_internal(const NeighborVertices &p_inserted_point_neighbor) const {
+	
+	if (!p_inserted_point_neighbor.is_valid())
+		return false;
+
+	const int p_prev = p_inserted_point_neighbor.prev;
+	const int p_next = p_inserted_point_neighbor.next;
+
+	if (!is_vertex_internal(p_prev) && !is_vertex_internal(p_next)) {
+		if ((is_vertex_last_non_internal(p_prev) && p_next == 0) || (abs(p_next - p_prev) == 1))
+			return false;
+	}
+	
+	return true;
 }
 
 void Polygon2D::set_color(const Color &p_color) {

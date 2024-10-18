@@ -79,6 +79,7 @@ protected:
 
 		int polygon = -1;
 		int vertex = -1;
+		bool is_at_internal_polygon() const;
 	};
 
 	struct PosVertex : public Vertex {
@@ -98,8 +99,15 @@ protected:
 	Vertex selected_point; // currently selected
 	PosVertex edge_point; // adding an edge point?
 	bool _update_edge_point(const PosVertex &new_edge_point);
-	bool _polygon_insert_vertex(const int polygon, const int at_vertex_idx, const Vector2 &at_pos, const Vector2 &pos_if_eidt);
+	virtual void _action_set_uv(Vector<Vector2> p_uv, bool p_is_new_action = true);
+	virtual void _action_create_internal_point(Vector2 p_pos, bool p_is_new_action = true);
+	virtual void _action_polygon_insert_vertex(const Polygon2D::NeighborVertices &p_inserted_point_neighbor, const Vector2 &p_pos, const Vector2 &p_pos_if_eidt, bool p_is_new_action = true);
+	virtual Polygon2D::NeighborVertices _get_inserted_point_neighbor(const int p_polygon_idx, const int p_insert_pos) const;
+	//virtual void _action_polygons_insert_vertex(const int p_polygon, const int p_vertex_idx, bool p_is_new_action);
+	virtual void _action_polygons_insert_vertex(const Polygon2D::NeighborVertices &p_inserted_point_neighbor, const int p_vertex_idx, bool p_is_new_action);
 	virtual Vector<Vector2> _get_polygon_edge_vertices(int p_idx) const;
+	virtual bool _is_inserted_point_internal(const Polygon2D::NeighborVertices &p_inserted_point_neighbor) const;
+	virtual int _get_non_internal_vertex_count() const;
 
 
 protected:
@@ -111,6 +119,11 @@ protected:
 	};
 
 	int mode = MODE_EDIT;
+
+	Vector<Vector2> uv_create_uv_prev;
+	Vector<Vector2> uv_create_poly_prev;
+	Vector<Color> uv_create_colors_prev;
+	Array uv_create_bones_prev;
 
 	virtual void _menu_option(int p_option);
 	void _wip_changed();
@@ -136,7 +149,12 @@ protected:
 	virtual int _get_polygon_count() const;
 	virtual Vector2 _get_offset(int p_idx) const;
 	virtual Variant _get_polygon(int p_idx) const;
+	virtual int _get_polygon_vertex_count() const;
 	virtual void _set_polygon(int p_idx, const Variant &p_polygon) const;
+	virtual void _set_internal_vertex_count(int p_count);
+	virtual int _get_internal_vertex_count() const;
+	virtual Array _get_polygons() const;
+	virtual void _action_set_polygons(const Array &p_polygons, bool p_is_new_action = true);
 
 	virtual void _action_add_polygon(const Variant &p_polygon);
 	virtual void _action_remove_polygon(int p_idx);

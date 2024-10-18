@@ -74,6 +74,18 @@ class Polygon2D : public Node2D {
 
 	RID mesh;
 
+public:
+	struct NeighborVertices {
+		NeighborVertices() {}
+		NeighborVertices(int p_prev, int p_next) :
+				prev(p_prev), next(p_next) {}
+
+		int prev = -1;
+		int next = -1;
+
+		bool is_valid() const { return prev >= 0 && next >= 0; }
+	}; 
+
 protected:
 	void _notification(int p_what);
 	static void _bind_methods();
@@ -106,6 +118,14 @@ public:
 	Array get_polygons() const;
 
 	int get_polygon_count() const;
+	int get_internal_polygon_count() const;
+	int get_vertex_count() const;
+	int get_non_internal_vertex_count() const;
+	bool is_vertex_internal(const int p_vertex) const;
+	bool is_vertex_last_non_internal(const int p_vertex) const;
+	void clear_polygons();
+	NeighborVertices get_inserted_point_neighbor(const int p_polygon_idx, const int p_insert_pos) const;
+	bool is_inserted_point_internal(const NeighborVertices &p_inserted_point_neighbor) const;
 
 	void set_color(const Color &p_color);
 	Color get_color() const;

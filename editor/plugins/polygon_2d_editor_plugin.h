@@ -125,11 +125,9 @@ class Polygon2DEditor : public AbstractPolygon2DEditor {
 	Vector2 uv_draw_ofs;
 	real_t uv_draw_zoom;
 	Vector<Vector2> points_prev;
-	Vector<Vector2> uv_create_uv_prev;
-	Vector<Vector2> uv_create_poly_prev;
-	Vector<Color> uv_create_colors_prev;
+	
 	int uv_create_prev_internal_vertices = 0;
-	Array uv_create_bones_prev;
+	
 	Array polygons_prev;
 
 	Vector2 uv_create_to;
@@ -173,11 +171,22 @@ class Polygon2DEditor : public AbstractPolygon2DEditor {
 
 	int _get_polygon_count() const override;
 	Vector<Vector2> _get_polygon_edge_vertices(int p_idx) const override;
+	
+	
 
 private:
 	Transform2D _get_polygon_to_ui_transform();
 
 protected:
+	virtual void _action_uvedit_polygon_to_uv(bool p_is_new_action = true);
+	
+	virtual void _action_polygon_insert_internal_point(const Polygon2D::NeighborVertices &p_inserted_point_neighbor, const Vector2 &p_pos, bool p_is_new_action=true);
+	
+	virtual void _set_internal_vertex_count(int p_count) override;
+	virtual int _get_internal_vertex_count() const override;
+	virtual int _get_polygon_vertex_count() const override;
+	virtual Array _get_polygons() const override;
+	virtual bool _is_inserted_point_internal(const Polygon2D::NeighborVertices &p_inserted_point_neighbor) const override;
 
 	virtual Polygon2D *_get_node() const override;
 	virtual void _set_node(Node *p_polygon) override;

@@ -79,6 +79,26 @@ class UVEditDialog : public AcceptDialog {
 
 
 
+void Polygon2DEditor::_set_internal_vertex_count(int p_count) {
+	_get_node()->set_internal_vertex_count(p_count);
+}
+
+int Polygon2DEditor::_get_internal_vertex_count() const {
+	return _get_node()->get_internal_vertex_count();
+}
+
+int Polygon2DEditor::_get_polygon_vertex_count() const {
+	return _get_node()->get_vertex_count();
+}
+
+Array Polygon2DEditor::_get_polygons() const {
+	return _get_node()->get_polygons();
+}
+
+bool Polygon2DEditor::_is_inserted_point_internal(const Polygon2D::NeighborVertices &p_inserted_point_neighbor) const {
+	return _get_node()->is_inserted_point_internal(p_inserted_point_neighbor);
+}
+
 Polygon2D *Polygon2DEditor::_get_node() const {
 	return node;
 }
@@ -109,8 +129,9 @@ Vector<Vector2> Polygon2DEditor::_get_polygon_edge_vertices(int p_idx) const {
 	Polygon2D *polygon_2d_node = _get_node();
 	const Array node_polygons = polygon_2d_node->get_polygons();
 	Vector<Vector2> polygon = polygon_2d_node->get_polygon();
+	p_idx--;
 
-	if (node_polygons.is_empty()) {
+	if (node_polygons.is_empty() || p_idx < 0) {
 		polygon.resize(polygon.size() - polygon_2d_node->get_internal_vertex_count());
 		return polygon;
 	} else if (node_polygons.size() > p_idx) {
@@ -127,6 +148,34 @@ Vector<Vector2> Polygon2DEditor::_get_polygon_edge_vertices(int p_idx) const {
 
 	return Vector<Vector2>();
 }
+
+void Polygon2DEditor::_action_uvedit_polygon_to_uv(bool p_is_new_action) {
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
+	Vector<Vector2> p_uv = node->get_polygon();
+	if (p_uv.size() == 0) {
+		return;
+	}
+	if (p_is_new_action)
+		undo_redo->create_action(TTR("Create UV Map"));
+	_action_set_uv(p_uv, false);
+	
+}
+
+
+
+
+
+void Polygon2DEditor::_action_polygon_insert_internal_point(const Polygon2D::NeighborVertices &p_inserted_point_neighbor, const Vector2 &p_pos, bool p_is_new_action) {
+	int new_vertex_index = _get_polygon_vertex_count();
+	Vector<Vector2> p_vertices = _get_polygon(0).duplicate();
+	
+	_action_polygons_insert_vertex(p_inserted_point_neighbor, new_vertex_index, false);
+	_action_create_internal_point(p_pos, false);
+	p_vertices.push_back(p_pos);
+	_action_set_uv(p_vertices, false);
+}
+
+
 
 Transform2D Polygon2DEditor::_get_polygon_to_ui_transform() {
 	Transform2D mtx;
@@ -575,9 +624,10 @@ void Polygon2DEditor::_uv_input(const Ref<InputEvent> &p_input) {
 						uv_create_prev_internal_vertices = node->get_internal_vertex_count();
 						uv_create_colors_prev = node->get_vertex_colors();
 						uv_create_bones_prev = node->call("_get_bones");
-						polygons_prev = node->get_polygons();
+						polygons_prev = node->get_polygons().duplicate();
 						disable_polygon_editing(false, String());
 						node->set_polygon(points_prev);
+						node->clear_polygons();
 						node->set_uv(points_prev);
 						node->set_internal_vertex_count(0);
 
@@ -592,6 +642,7 @@ void Polygon2DEditor::_uv_input(const Ref<InputEvent> &p_input) {
 							undo_redo->add_undo_method(node, "set_uv", uv_create_uv_prev);
 							undo_redo->add_do_method(node, "set_polygon", node->get_polygon());
 							undo_redo->add_undo_method(node, "set_polygon", uv_create_poly_prev);
+							undo_redo->add_undo_method(node, "set_polygons", polygons_prev);
 							undo_redo->add_do_method(node, "set_internal_vertex_count", 0);
 							undo_redo->add_undo_method(node, "set_internal_vertex_count", uv_create_prev_internal_vertices);
 							undo_redo->add_do_method(node, "set_vertex_colors", Vector<Color>());
@@ -730,11 +781,20 @@ void Polygon2DEditor::_uv_input(const Ref<InputEvent> &p_input) {
 					Vector2 gpoint = mb->get_position();
 
 					const PosVertex insert = closest_edge_point(gpoint, mtx);
-
+					
 					
 					if (insert.valid()) {
-						_polygon_insert_vertex(insert.polygon, insert.vertex, mtx.affine_inverse().xform(insert.pos), mtx.affine_inverse().xform(gpoint));
-
+						Polygon2D::NeighborVertices p_inserted_point_neighbor = _get_inserted_point_neighbor(insert.polygon, insert.vertex + 1);
+						undo_redo->create_action(TTR("Insert Point"));
+						if (insert.is_at_internal_polygon() && _is_inserted_point_internal(p_inserted_point_neighbor)) {
+							// inserted point is an internal point
+							_action_polygon_insert_internal_point(p_inserted_point_neighbor, mtx.affine_inverse().xform(insert.pos), false);
+						} else {
+							_action_polygon_insert_vertex(p_inserted_point_neighbor, mtx.affine_inverse().xform(insert.pos), mtx.affine_inverse().xform(gpoint), false);
+						}
+						
+						//_action_uvedit_polygon_to_uv(false);
+						_commit_action();
 					}
 
 				}
@@ -1114,8 +1174,8 @@ void Polygon2DEditor::_update_zoom_and_pan(bool p_zoom_at_center) {
 }
 
 
-bool Polygon2DEditor::is_uv_edit_mode(const UV_EDIT_MODE mode) const {
-	return uv_edit_mode[static_cast<size_t>(mode)]->is_pressed();
+bool Polygon2DEditor::is_uv_edit_mode(const UV_EDIT_MODE p_mode) const {
+	return uv_edit_mode[static_cast<size_t>(p_mode)]->is_pressed();
 }
 
 void Polygon2DEditor::_uv_draw() {
@@ -1225,11 +1285,11 @@ void Polygon2DEditor::_uv_draw() {
 	// All UV points are sharp, so use the sharp handle icon
 	Ref<Texture2D> handle = get_editor_theme_icon(SNAME("EditorPathSharpHandle"));
 
-	Color poly_line_color = Color(0.9, 0.0, 0.0); // MYTODO: undo this color change
+	Color poly_line_color = Color(0.0, 0.9, 0.0); // MYTODO: undo this color change
 	if (polygons.size() || polygon_create.size()) {
 		poly_line_color.a *= 0.25;
 	}
-	Color polygon_line_color = Color(0.9, 0.0, 0.0); // MYTODO: undo this color change
+	Color polygon_line_color = Color(0.0, 0.9, 0.0); // MYTODO: undo this color change
 	Color polygon_fill_color = polygon_line_color;
 	polygon_fill_color.a *= 0.5;
 	Color prev_color = Color(0.5, 0.5, 0.5);

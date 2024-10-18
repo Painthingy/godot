@@ -54,6 +54,10 @@ bool AbstractPolygon2DEditor::Vertex::valid() const {
 	return vertex >= 0;
 }
 
+bool AbstractPolygon2DEditor::Vertex::is_at_internal_polygon() const {
+	return polygon > 0;
+}
+
 bool AbstractPolygon2DEditor::_is_empty() const {
 	if (!_get_node()) {
 		return true;
@@ -88,8 +92,37 @@ Variant AbstractPolygon2DEditor::_get_polygon(int p_idx) const {
 	return _get_node()->get("polygon");
 }
 
+int AbstractPolygon2DEditor::_get_polygon_vertex_count() const {
+	
+	return _get_node()->call("get_vertex_count");
+}
+
 void AbstractPolygon2DEditor::_set_polygon(int p_idx, const Variant &p_polygon) const {
 	_get_node()->set("polygon", p_polygon);
+}
+
+void AbstractPolygon2DEditor::_set_internal_vertex_count(int p_count) {
+	_get_node()->call("set_internal_vertex_count", p_count);
+}
+
+int AbstractPolygon2DEditor::_get_internal_vertex_count() const {
+	return _get_node()->call("get_internal_vertex_count");
+}
+
+Array AbstractPolygon2DEditor::_get_polygons() const {
+	return _get_node()->call("get_polygons");
+}
+
+void AbstractPolygon2DEditor::_action_set_polygons(const Array &p_polygons, bool p_is_new_action) {
+	Node2D *p_node = _get_node();
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
+	if (p_is_new_action)
+		undo_redo->create_action(TTR("Add Custom Polygon"));
+	
+	const Array &p_previous = _get_polygons();
+	undo_redo->add_do_method(p_node, "set_polygons", p_polygons);
+	undo_redo->add_undo_method(p_node, "set_polygons", p_previous);
+
 }
 
 void AbstractPolygon2DEditor::_action_set_polygon(int p_idx, const Variant &p_previous, const Variant &p_polygon) {
@@ -145,39 +178,156 @@ bool AbstractPolygon2DEditor::_update_edge_point(const PosVertex &new_edge_point
 	return changed;
 }
 
-bool AbstractPolygon2DEditor::_polygon_insert_vertex(const int polygon, const int at_vertex_idx, const Vector2 &at_pos, const Vector2 &pos_if_eidt) {
-	bool committed = false;
+void AbstractPolygon2DEditor::_action_set_uv(Vector<Vector2> p_uv, bool p_is_new_action) {
 	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
-	Vector<Vector2> vertices = _get_polygon(polygon);
+	Polygon2D *p_node = static_cast<Polygon2D *>(_get_node());
 
+	Vector<Vector2> p_prev_uv = p_node->get_uv();
+	undo_redo->add_do_method(p_node, "set_uv", p_uv);
+	undo_redo->add_undo_method(p_node, "set_uv", p_prev_uv);
+}
+
+void AbstractPolygon2DEditor::_action_create_internal_point(Vector2 p_pos, bool p_is_new_action) {
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
+	Polygon2D *p_node = static_cast<Polygon2D *>(_get_node());
+	uv_create_uv_prev = p_node->get_uv();
+	uv_create_poly_prev = p_node->get_polygon();
+	uv_create_colors_prev = p_node->get_vertex_colors();
+	uv_create_bones_prev = p_node->call("_get_bones");
+	int internal_vertices = _get_internal_vertex_count();
+
+	uv_create_poly_prev.push_back(p_pos);
+	uv_create_uv_prev.push_back(p_pos);
+	if (uv_create_colors_prev.size()) {
+		uv_create_colors_prev.push_back(Color(1, 1, 1));
+	}
+
+	if (p_is_new_action)
+		undo_redo->create_action(TTR("Create Internal Vertex"));
+	/*undo_redo->add_do_method(p_node, "set_uv", uv_create_uv_prev);
+	undo_redo->add_undo_method(p_node, "set_uv", p_node->get_uv());*/
+	undo_redo->add_do_method(p_node, "set_polygon", uv_create_poly_prev);
+	undo_redo->add_undo_method(p_node, "set_polygon", p_node->get_polygon());
+	undo_redo->add_do_method(p_node, "set_vertex_colors", uv_create_colors_prev);
+	undo_redo->add_undo_method(p_node, "set_vertex_colors", p_node->get_vertex_colors());
+	for (int i = 0; i < p_node->get_bone_count(); i++) {
+		Vector<float> bonew = p_node->get_bone_weights(i);
+		bonew.push_back(0);
+		undo_redo->add_do_method(p_node, "set_bone_weights", i, bonew);
+		undo_redo->add_undo_method(p_node, "set_bone_weights", i, p_node->get_bone_weights(i));
+	}
+	undo_redo->add_do_method(p_node, "set_internal_vertex_count", internal_vertices + 1);
+	undo_redo->add_undo_method(p_node, "set_internal_vertex_count", internal_vertices);
+	undo_redo->add_do_method(this, "_update_polygon_editing_state");
+	undo_redo->add_undo_method(this, "_update_polygon_editing_state");
+}
+
+void AbstractPolygon2DEditor::_action_polygon_insert_vertex(const Polygon2D::NeighborVertices &p_inserted_point_neighbor, const Vector2 &p_pos, const Vector2 &p_pos_if_eidt, bool p_is_new_action) {
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
+	Vector<Vector2> vertices = _get_polygon(0);
+	int64_t p_size = vertices.size();
+	
+	const int n_non_internal_vertex = _get_non_internal_vertex_count();
+	// is std::minmax better?
+	const int p_sorted_prev = MIN(p_inserted_point_neighbor.next, p_inserted_point_neighbor.prev);
+	const int p_sorted_next = MAX(p_inserted_point_neighbor.next, p_inserted_point_neighbor.prev);
+	const int p_insert_position = (p_sorted_prev == 0 && p_sorted_next == n_non_internal_vertex - 1) ? 0 : p_sorted_next;
+	
 	if (vertices.size() < (_is_line() ? 2 : 3)) {
-		vertices.push_back(pos_if_eidt);
-		undo_redo->create_action(TTR("Edit Polygon"));
-		selected_point = Vertex(polygon, vertices.size());
-		_action_set_polygon(polygon, vertices);
-		_commit_action();
-		committed = true;
-
+		vertices.push_back(p_pos_if_eidt);
+		if (p_is_new_action)
+			undo_redo->create_action(TTR("Edit Polygon"));
+		selected_point = Vertex(0, vertices.size());
+		_action_set_polygon(0, vertices);
+		
 	} else {
 		//edited_point = PosVertex(insert.polygon, insert.vertex + 1, mtx.affine_inverse().xform(insert.pos));
-		edited_point = PosVertex(polygon, at_vertex_idx + 1, at_pos);
+		edited_point = PosVertex(0, p_insert_position, p_pos);
 		vertices.insert(edited_point.vertex, edited_point.pos);
 		//pre_move_edit = vertices;
 		selected_point = Vertex(edited_point.polygon, edited_point.vertex);
 		edge_point = PosVertex();
-		undo_redo->create_action(TTR("Insert Point"));
-		_action_set_polygon(polygon, vertices);
-		_commit_action();
-		committed = true;
+		if (p_is_new_action)
+			undo_redo->create_action(TTR("Insert Point"));
+		_action_set_polygon(0, vertices);
+		
 	}
 
-
-	return committed;
+	_action_polygons_insert_vertex(p_inserted_point_neighbor, p_insert_position, false);
+	_action_set_uv(vertices, false);
+	
 }
+
+Polygon2D::NeighborVertices AbstractPolygon2DEditor::_get_inserted_point_neighbor(const int p_polygon_idx, const int p_insert_pos) const {
+	Polygon2D *p_node = static_cast<Polygon2D *>(_get_node());
+	return p_node->get_inserted_point_neighbor(p_polygon_idx, p_insert_pos);
+	
+}
+
+
+
+void AbstractPolygon2DEditor::_action_polygons_insert_vertex(const Polygon2D::NeighborVertices &p_inserted_point_neighbor, const int p_vertex_idx, bool p_is_new_action=true) {
+	Array p_polygons_copy = _get_polygons().duplicate();
+	const int n_polygons = p_polygons_copy.size();
+	const int p_prev = p_inserted_point_neighbor.prev;
+	const int p_next = p_inserted_point_neighbor.next;
+
+	for (int j = 0; j < n_polygons; j++) {
+		const Array p_polygons_read = p_polygons_copy.get(j);
+		Array p_polygons_write = p_polygons_read.duplicate();
+		const int n_polygons_points = p_polygons_read.size();
+		int p_insert_position = -1;
+		for (int i = 0; i < n_polygons_points; i++) {
+			const int p_polygons_point = p_polygons_read.get(i);
+			const int p_polygons_next_idx = (i == n_polygons_points - 1) ? 0 : i+1;
+			const int p_polygons_next_point = p_polygons_read.get(p_polygons_next_idx);
+			if ((p_polygons_point == p_prev && p_polygons_next_point == p_next) || (p_polygons_point == p_next && p_polygons_next_point == p_prev))
+				p_insert_position = p_polygons_next_idx;
+
+			
+			/*if (p_polygons_point == p_prev) {
+				int p_polygons_next_point;
+				if (i == n_polygons_points - 1) {
+					p_polygons_next_point = p_polygons_read.front();
+					if (p_polygons_next_point == p_next)
+						p_insert_position = n_polygons_points;
+				}
+				else {
+					p_polygons_next_point = p_polygons_read.get(i + 1);
+					if (p_polygons_next_point == p_next)
+						p_insert_position = i + 1;
+				}
+			} */
+			if (p_polygons_point >= p_vertex_idx)
+				p_polygons_write.set(i, p_polygons_point + 1);
+		}
+		if (p_insert_position >= 0) 
+			p_polygons_write.insert(p_insert_position, p_vertex_idx);
+			
+		p_polygons_copy.set(j, p_polygons_write);
+			
+	}
+	_action_set_polygons(p_polygons_copy, false);
+
+}
+
+
 
 Vector<Vector2> AbstractPolygon2DEditor::_get_polygon_edge_vertices(int p_idx) const {
 	return _get_polygon(p_idx);
 }
+
+bool AbstractPolygon2DEditor::_is_inserted_point_internal(const Polygon2D::NeighborVertices &p_inserted_point_neighbor) const {
+	Polygon2D *p_node = static_cast<Polygon2D *>(_get_node());
+	return p_node->is_inserted_point_internal(p_inserted_point_neighbor);
+}
+
+int AbstractPolygon2DEditor::_get_non_internal_vertex_count() const {
+	Polygon2D *p_node = static_cast<Polygon2D *>(_get_node());
+	return p_node->get_non_internal_vertex_count();
+}
+
+
 
 
 

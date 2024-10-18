@@ -103,8 +103,8 @@ protected:
 	virtual void _action_create_internal_point(Vector2 p_pos, bool p_is_new_action = true);
 	virtual void _action_polygon_insert_vertex(const Polygon2D::NeighborVertices &p_inserted_point_neighbor, const Vector2 &p_pos, const Vector2 &p_pos_if_eidt, bool p_is_new_action = true);
 	virtual Polygon2D::NeighborVertices _get_inserted_point_neighbor(const int p_polygon_idx, const int p_insert_pos) const;
-	//virtual void _action_polygons_insert_vertex(const int p_polygon, const int p_vertex_idx, bool p_is_new_action);
 	virtual void _action_polygons_insert_vertex(const Polygon2D::NeighborVertices &p_inserted_point_neighbor, const int p_vertex_idx, bool p_is_new_action);
+	virtual void _action_polygon_remove_vertex(const int p_vertex);
 	virtual Vector<Vector2> _get_polygon_edge_vertices(int p_idx) const;
 	virtual bool _is_inserted_point_internal(const Polygon2D::NeighborVertices &p_inserted_point_neighbor) const;
 	virtual int _get_non_internal_vertex_count() const;

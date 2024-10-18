@@ -124,6 +124,7 @@ public:
 	bool is_vertex_internal(const int p_vertex) const;
 	bool is_vertex_last_non_internal(const int p_vertex) const;
 	void clear_polygons();
+	int get_picked_vertex(const Vector2 &p_pos, const real_t p_min_dist = 8.0) const;
 	NeighborVertices get_inserted_point_neighbor(const int p_polygon_idx, const int p_insert_pos) const;
 	bool is_inserted_point_internal(const NeighborVertices &p_inserted_point_neighbor) const;
 

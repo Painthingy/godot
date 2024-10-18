@@ -224,8 +224,8 @@ void AbstractPolygon2DEditor::_action_create_internal_point(Vector2 p_pos, bool 
 
 void AbstractPolygon2DEditor::_action_polygon_insert_vertex(const Polygon2D::NeighborVertices &p_inserted_point_neighbor, const Vector2 &p_pos, const Vector2 &p_pos_if_eidt, bool p_is_new_action) {
 	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
-	Vector<Vector2> vertices = _get_polygon(0);
-	int64_t p_size = vertices.size();
+	Vector<Vector2> p_vertices = _get_polygon(0);
+	const int64_t p_size = p_vertices.size();
 	
 	const int n_non_internal_vertex = _get_non_internal_vertex_count();
 	// is std::minmax better?
@@ -233,28 +233,28 @@ void AbstractPolygon2DEditor::_action_polygon_insert_vertex(const Polygon2D::Nei
 	const int p_sorted_next = MAX(p_inserted_point_neighbor.next, p_inserted_point_neighbor.prev);
 	const int p_insert_position = (p_sorted_prev == 0 && p_sorted_next == n_non_internal_vertex - 1) ? 0 : p_sorted_next;
 	
-	if (vertices.size() < (_is_line() ? 2 : 3)) {
-		vertices.push_back(p_pos_if_eidt);
+	if (p_vertices.size() < (_is_line() ? 2 : 3)) {
+		p_vertices.push_back(p_pos_if_eidt);
 		if (p_is_new_action)
 			undo_redo->create_action(TTR("Edit Polygon"));
-		selected_point = Vertex(0, vertices.size());
-		_action_set_polygon(0, vertices);
+		selected_point = Vertex(0, p_vertices.size());
+		_action_set_polygon(0, p_vertices);
 		
 	} else {
 		//edited_point = PosVertex(insert.polygon, insert.vertex + 1, mtx.affine_inverse().xform(insert.pos));
 		edited_point = PosVertex(0, p_insert_position, p_pos);
-		vertices.insert(edited_point.vertex, edited_point.pos);
+		p_vertices.insert(edited_point.vertex, edited_point.pos);
 		//pre_move_edit = vertices;
 		selected_point = Vertex(edited_point.polygon, edited_point.vertex);
 		edge_point = PosVertex();
 		if (p_is_new_action)
 			undo_redo->create_action(TTR("Insert Point"));
-		_action_set_polygon(0, vertices);
+		_action_set_polygon(0, p_vertices);
 		
 	}
 
 	_action_polygons_insert_vertex(p_inserted_point_neighbor, p_insert_position, false);
-	_action_set_uv(vertices, false);
+	_action_set_uv(p_vertices, false);
 	
 }
 
@@ -284,20 +284,6 @@ void AbstractPolygon2DEditor::_action_polygons_insert_vertex(const Polygon2D::Ne
 			if ((p_polygons_point == p_prev && p_polygons_next_point == p_next) || (p_polygons_point == p_next && p_polygons_next_point == p_prev))
 				p_insert_position = p_polygons_next_idx;
 
-			
-			/*if (p_polygons_point == p_prev) {
-				int p_polygons_next_point;
-				if (i == n_polygons_points - 1) {
-					p_polygons_next_point = p_polygons_read.front();
-					if (p_polygons_next_point == p_next)
-						p_insert_position = n_polygons_points;
-				}
-				else {
-					p_polygons_next_point = p_polygons_read.get(i + 1);
-					if (p_polygons_next_point == p_next)
-						p_insert_position = i + 1;
-				}
-			} */
 			if (p_polygons_point >= p_vertex_idx)
 				p_polygons_write.set(i, p_polygons_point + 1);
 		}
@@ -308,6 +294,56 @@ void AbstractPolygon2DEditor::_action_polygons_insert_vertex(const Polygon2D::Ne
 			
 	}
 	_action_set_polygons(p_polygons_copy, false);
+
+}
+
+void AbstractPolygon2DEditor::_action_polygon_remove_vertex(const int p_vertex) {
+	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
+	Vector<Vector2> p_vertices = _get_polygon(0);
+	const int64_t p_size = p_vertices.size();
+	Array p_polygons_copy = _get_polygons().duplicate();
+	const int n_polygons = p_polygons_copy.size();
+	Polygon2D *p_node = static_cast<Polygon2D *>(_get_node());
+
+	const int p_prev_internal_vertex_count = p_node->get_internal_vertex_count();
+	int p_next_internal_vertex_count = p_prev_internal_vertex_count; 
+
+	if (p_size <= 3) {
+		p_vertices.clear();
+		p_polygons_copy.clear();
+		p_next_internal_vertex_count = 0;
+
+	} else {
+		p_vertices.remove_at(p_vertex);
+		if (p_node->is_vertex_internal(p_vertex))
+			p_next_internal_vertex_count -= 1;
+
+		for (int j = 0; j < n_polygons; j++) {
+			Array p_polygons_write = p_polygons_copy.get(j).duplicate();
+			p_polygons_write.erase(p_vertex);
+			const int n_polygons_points = p_polygons_write.size();
+			if (n_polygons_points < 3) {
+				p_polygons_copy.remove_at(j);
+				j--;
+				continue;
+			}
+
+			for (int i = 0; i < n_polygons_points; i++) {
+				const int p_polygons_point = p_polygons_write.get(i);
+				if (p_polygons_point > p_vertex)
+					p_polygons_write.set(i, p_polygons_point - 1);
+			}
+			p_polygons_copy.set(j, p_polygons_write);
+		}
+
+	}
+	
+	_action_set_polygon(0, p_vertices);
+	_action_set_uv(p_vertices, false);
+	_action_set_polygons(p_polygons_copy, false);
+
+	undo_redo->add_do_method(p_node, "set_internal_vertex_count", p_next_internal_vertex_count);
+	undo_redo->add_undo_method(p_node, "set_internal_vertex_count", p_prev_internal_vertex_count);
 
 }
 

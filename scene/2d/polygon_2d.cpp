@@ -465,6 +465,24 @@ void Polygon2D::clear_polygons() {
 	polygons.clear();
 }
 
+int Polygon2D::get_picked_vertex(const Vector2 &p_pos, const real_t p_min_dist) const {
+	int p_closest = -1;
+	real_t p_closest_dist = p_min_dist;
+	const int n_vertex = get_vertex_count();
+	const Vector<Vector2> p_polygon = get_polygon();
+
+	for (int i = 0; i < n_vertex; i++) {
+		Vector2 p_point = p_polygon.get(i);
+		real_t p_dist = p_point.distance_to(p_pos);
+		if (p_dist < p_closest_dist) {
+			p_closest = i;
+			p_closest_dist = p_dist;
+		}
+	}
+
+	return p_closest;
+}
+
 Polygon2D::NeighborVertices Polygon2D::get_inserted_point_neighbor(const int p_polygon_idx, const int p_insert_pos) const {
 	if (p_polygon_idx == 0) {
 		const int n_vertices = get_non_internal_vertex_count();
